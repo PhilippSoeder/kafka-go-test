@@ -1,0 +1,40 @@
+services:
+  kafka:
+    container_name: kafka
+    image: apache/kafka:latest
+    restart: always
+    environment:
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092,CONTROLLER://kafka:9093
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL: PLAINTEXT
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: controller,broker
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_KRAFT_MODE: "true"
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+    ports:
+      - "9092:9092"
+    healthcheck:
+      test: ["CMD", "kafka-topics", "--bootstrap-server", "localhost:9092", "--list"]
+      interval: 30s
+      retries: 5
+      start_period: 10s
+      timeout: 20s
+
+  kafka-setup:
+    image: apache/kafka:latest
+    container_name: kafka-setup
+    depends_on:
+      - kafka
+    entrypoint: >
+      /bin/sh -c '
+      echo "Waiting for Kafka..."
+      while ! kafka-topics --bootstrap-server kafka:9092 --list &>/dev/null; do
+        sleep 1
+      done
+      echo "Kafka is ready. Creating topic if not exists..."
+      kafka-topics --create --topic orders --bootstrap-server kafka:9092 --partitions 1 --replication-factor 1 --if-not-exists || true
+      echo "Topic created or already exists!"
+      '
